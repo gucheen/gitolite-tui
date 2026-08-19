@@ -10,6 +10,8 @@ and provides both an interactive terminal UI and script-friendly commands.
 ## Features
 
 - Browse and search accessible Gitolite repositories.
+- Display wildcard repository rules without attempting to load logs or open
+  them with `tig`.
 - View the SSH clone URL for each repository.
 - Cache shallow bare clones and inspect recent commits.
 - Copy clone URLs, clone repositories locally, refresh cached data, and open

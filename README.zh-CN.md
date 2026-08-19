@@ -6,6 +6,8 @@
 `ssh git@HOST info` 获取可访问仓库，在 XDG 缓存目录维护浅 bare clone，
 并同时提供 TUI 和可脚本化的子命令。
 
+Wildcard 仓库规则会保留在列表中，但不会加载日志，也不能用 `tig` 打开。
+
 ## 安装和配置
 
 ```sh

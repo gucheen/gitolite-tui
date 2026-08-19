@@ -11,8 +11,9 @@ import (
 )
 
 type Repository struct {
-	Name   string
-	Access string
+	Name     string
+	Access   string
+	Wildcard bool
 }
 
 type Client struct {
@@ -75,7 +76,7 @@ func ParseInfo(output string) ([]Repository, error) {
 		if name == "" || access == "" || !validAccess(access) {
 			continue
 		}
-		byName[name] = Repository{Name: name, Access: access}
+		byName[name] = Repository{Name: name, Access: access, Wildcard: IsWildcard(name)}
 	}
 
 	repos := make([]Repository, 0, len(byName))
@@ -84,6 +85,15 @@ func ParseInfo(output string) ([]Repository, error) {
 	}
 	sort.Slice(repos, func(i, j int) bool { return repos[i].Name < repos[j].Name })
 	return repos, nil
+}
+
+// IsWildcard reports whether a Gitolite info entry is a repository pattern
+// rather than the name of a concrete repository.
+func IsWildcard(name string) bool {
+	if strings.ContainsAny(name, `*?[](){}^$|\`) {
+		return true
+	}
+	return strings.Contains(name, ".+")
 }
 
 func validAccess(access string) bool {

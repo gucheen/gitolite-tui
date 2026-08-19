@@ -18,8 +18,10 @@ func TestParseInfo(t *testing.T) {
  R W	gitolite-admin
  R  	platform/api
    W	platform/write-only
+ R W	CREATOR/..*
 `,
 			wanted: []Repository{
+				{Name: "CREATOR/..*", Access: "R W", Wildcard: true},
 				{Name: "gitolite-admin", Access: "R W"},
 				{Name: "platform/api", Access: "R"},
 				{Name: "platform/write-only", Access: "W"},
@@ -50,6 +52,22 @@ func TestParseInfo(t *testing.T) {
 				t.Fatalf("ParseInfo() = %#v, want %#v", got, test.wanted)
 			}
 		})
+	}
+}
+
+func TestIsWildcard(t *testing.T) {
+	tests := map[string]bool{
+		"team/api":       false,
+		"team/api.v2":    false,
+		"team/repo+name": false,
+		"CREATOR/..*":    true,
+		"team/[a-z].*":   true,
+		"team/repo.+":    true,
+	}
+	for name, wanted := range tests {
+		if got := IsWildcard(name); got != wanted {
+			t.Errorf("IsWildcard(%q) = %v, want %v", name, got, wanted)
+		}
 	}
 }
 

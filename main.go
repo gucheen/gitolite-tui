@@ -111,6 +111,9 @@ func run(args []string) error {
 			return errors.New("usage: gitolite-tui log <repo>")
 		}
 		repo := rest[0]
+		if gitolite.IsWildcard(repo) {
+			return fmt.Errorf("%q is a wildcard repository rule; logs are only available for concrete repositories", repo)
+		}
 		if err := store.Ensure(ctx, repo, client.CloneURL(repo)); err != nil {
 			return err
 		}

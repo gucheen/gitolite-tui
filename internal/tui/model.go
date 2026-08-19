@@ -232,11 +232,21 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if repo, ok := m.selected(); ok {
+				if repo.Wildcard {
+					m.err, m.active, m.commits = nil, "", nil
+					m.status = "Wildcard repository rules do not have commit logs"
+					break
+				}
 				m.loading, m.err, m.status = true, nil, "Caching and loading "+repo.Name+"…"
 				return m, m.loadLogCmd(repo.Name, false)
 			}
 		case "r":
 			if repo, ok := m.selected(); ok {
+				if repo.Wildcard {
+					m.err, m.active, m.commits = nil, "", nil
+					m.status = "Wildcard repository rules cannot be refreshed"
+					break
+				}
 				m.loading, m.err, m.status = true, nil, "Refreshing "+repo.Name+"…"
 				return m, m.loadLogCmd(repo.Name, true)
 			}
@@ -254,6 +264,11 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "t":
 			if repo, ok := m.selected(); ok {
+				if repo.Wildcard {
+					m.err = nil
+					m.status = "Wildcard repository rules cannot be opened with tig"
+					break
+				}
 				m.loading, m.err, m.status = true, nil, "Opening tig…"
 				return m, m.prepareTigCmd(repo.Name)
 			}
@@ -287,7 +302,11 @@ func (m Model) View() string {
 		if row == m.cursor {
 			marker = "> "
 		}
-		fmt.Fprintf(&out, "%s%-6s %s\n", marker, repo.Access, truncate(repo.Name, max(10, m.width-11)))
+		name := repo.Name
+		if repo.Wildcard {
+			name += "  [wildcard]"
+		}
+		fmt.Fprintf(&out, "%s%-6s %s\n", marker, repo.Access, truncate(name, max(10, m.width-11)))
 	}
 	for row := end - start; row < listHeight; row++ {
 		out.WriteByte('\n')
@@ -295,19 +314,22 @@ func (m Model) View() string {
 
 	if repo, ok := m.selected(); ok {
 		fmt.Fprintf(&out, "\nClone: %s\n", m.client.CloneURL(repo.Name))
-	}
-	if m.active != "" {
-		fmt.Fprintf(&out, "Recent commits — %s\n", m.active)
-		commitRows := max(1, m.height-listHeight-10)
-		if m.height == 0 {
-			commitRows = 8
+		if repo.Wildcard {
+			out.WriteString("This is a wildcard rule; log, refresh, and tig are unavailable.\n")
 		}
-		for i, commit := range m.commits {
-			if i >= commitRows {
-				break
+		if m.active == repo.Name {
+			fmt.Fprintf(&out, "Recent commits — %s\n", m.active)
+			commitRows := max(1, m.height-listHeight-10)
+			if m.height == 0 {
+				commitRows = 8
 			}
-			line := fmt.Sprintf("%s %s %-14s %s", commit.Hash, commit.Date, commit.Author, commit.Subject)
-			out.WriteString(truncate(line, max(20, m.width)) + "\n")
+			for i, commit := range m.commits {
+				if i >= commitRows {
+					break
+				}
+				line := fmt.Sprintf("%s %s %-14s %s", commit.Hash, commit.Date, commit.Author, commit.Subject)
+				out.WriteString(truncate(line, max(20, m.width)) + "\n")
+			}
 		}
 	}
 
