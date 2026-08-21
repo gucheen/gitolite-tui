@@ -1,6 +1,7 @@
 package gitolite
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -80,5 +81,23 @@ func TestCloneURL(t *testing.T) {
 		if got := client.CloneURL(input); got != wanted {
 			t.Errorf("CloneURL(%q) = %q, want %q", input, got, wanted)
 		}
+	}
+}
+
+func TestParseTrashList(t *testing.T) {
+	input := "team/alice/api/2026-08-21_10:20:30\r\n\r\n personal/notes/2026-08-20_09:00:00 \r\n"
+	wanted := []string{
+		"team/alice/api/2026-08-21_10:20:30",
+		"personal/notes/2026-08-20_09:00:00",
+	}
+	if got := ParseTrashList(input); !reflect.DeepEqual(got, wanted) {
+		t.Fatalf("ParseTrashList() = %#v, want %#v", got, wanted)
+	}
+}
+
+func TestSetDescriptionRejectsEmptyText(t *testing.T) {
+	client := Client{}
+	if err := client.SetDescription(context.Background(), "team/alice/api", "  "); err == nil {
+		t.Fatal("SetDescription accepted an empty description")
 	}
 }

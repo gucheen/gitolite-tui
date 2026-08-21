@@ -26,12 +26,22 @@ gitolite-tui list
 gitolite-tui url <repo>
 gitolite-tui log <repo>
 gitolite-tui clone <repo> [directory]
+gitolite-tui create <repo>
+gitolite-tui desc <repo> [description]
+gitolite-tui trash <repo>
+gitolite-tui trash-list
+gitolite-tui restore <trash-id>
 gitolite-tui tui
 ```
 
 TUI 按键：`/` 搜索，方向键或 `j/k` 选择，`enter` 缓存并显示提交，
-`c` 复制 Clone 地址，`l` Clone 到当前目录，`r` 刷新当前仓库，`R` 重新
-获取仓库列表，`t` 用 tig 打开缓存，`q` 退出。
+`n` 创建 wildcard 仓库，`e` 编辑描述，`d` 将仓库移入 Trash，`T` 查看
+Trash 并恢复仓库，`c` 复制 Clone 地址，`l` Clone 到当前目录，`r` 刷新
+当前仓库，`R` 重新获取仓库列表，`t` 用 tig 打开缓存，`q` 退出。
+
+创建、描述和 Trash 功能需要 Gitolite 服务器在 `.gitolite.rc` 中启用对应的
+`create`、`desc` 和 `D` 远程命令。删除功能只调用可恢复的 `D trash`，不会
+执行 `D rm` 永久删除。
 
 缓存位于 `$XDG_CACHE_HOME/gitolite-tui/repos`。所有 `ssh` 和 `git` 调用
 均通过参数数组执行，不经过 Shell。

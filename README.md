@@ -50,6 +50,11 @@ gitolite-tui list
 gitolite-tui url <repo>
 gitolite-tui log <repo>
 gitolite-tui clone <repo> [directory]
+gitolite-tui create <repo>
+gitolite-tui desc <repo> [description]
+gitolite-tui trash <repo>
+gitolite-tui trash-list
+gitolite-tui restore <trash-id>
 gitolite-tui tui
 ```
 
@@ -62,12 +67,21 @@ Running `gitolite-tui` without a command also starts the TUI.
 | `/` | Edit the repository search query |
 | `Up` / `Down`, `j` / `k` | Select a repository |
 | `Enter` | Cache the selected repository and show recent commits |
+| `n` | Create a wildcard repository |
+| `e` | Edit the selected repository description |
+| `d` | Move the selected repository to trash |
+| `T` | Open the trash and restore repositories |
 | `c` | Copy the clone URL |
 | `l` | Clone the repository into the current directory |
 | `r` | Refresh the selected cached repository |
 | `R` | Reload the repository list from Gitolite |
 | `t` | Open the cached repository with `tig` |
 | `q` | Quit |
+
+The create, description, and trash features require the corresponding `create`,
+`desc`, and `D` remote commands to be enabled in the Gitolite server's
+`.gitolite.rc`. Deletion only uses recoverable `D trash`; the application never
+runs permanent `D rm` deletion.
 
 ## Cache
 

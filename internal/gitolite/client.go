@@ -3,6 +3,7 @@ package gitolite
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -25,23 +26,71 @@ func (c Client) target() string {
 	return c.User + "@" + c.Host
 }
 
-func (c Client) List(ctx context.Context) ([]Repository, error) {
-	cmd := exec.CommandContext(ctx, "ssh", c.target(), "info")
+func (c Client) command(ctx context.Context, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "ssh", append([]string{c.target()}, args...)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		action := "ssh " + c.target() + " " + strings.Join(args, " ")
 		message := strings.TrimSpace(stderr.String())
 		if message != "" {
-			return nil, fmt.Errorf("ssh %s info: %w: %s", c.target(), err, message)
+			return "", fmt.Errorf("%s: %w: %s", action, err, message)
 		}
-		return nil, fmt.Errorf("ssh %s info: %w", c.target(), err)
+		return "", fmt.Errorf("%s: %w", action, err)
 	}
-	repos, err := ParseInfo(stdout.String())
+	return stdout.String(), nil
+}
+
+func (c Client) List(ctx context.Context) ([]Repository, error) {
+	output, err := c.command(ctx, "info")
+	if err != nil {
+		return nil, err
+	}
+	repos, err := ParseInfo(output)
 	if err != nil {
 		return nil, fmt.Errorf("parse gitolite info: %w", err)
 	}
 	return repos, nil
+}
+
+func (c Client) Create(ctx context.Context, repo string) error {
+	_, err := c.command(ctx, "create", repo)
+	return err
+}
+
+func (c Client) Description(ctx context.Context, repo string) (string, error) {
+	output, err := c.command(ctx, "desc", repo)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(output), nil
+}
+
+func (c Client) SetDescription(ctx context.Context, repo, description string) error {
+	if strings.TrimSpace(description) == "" {
+		return errors.New("description cannot be empty")
+	}
+	_, err := c.command(ctx, "desc", repo, description)
+	return err
+}
+
+func (c Client) Trash(ctx context.Context, repo string) error {
+	_, err := c.command(ctx, "D", "trash", repo)
+	return err
+}
+
+func (c Client) ListTrash(ctx context.Context) ([]string, error) {
+	output, err := c.command(ctx, "D", "list-trash")
+	if err != nil {
+		return nil, err
+	}
+	return ParseTrashList(output), nil
+}
+
+func (c Client) Restore(ctx context.Context, trashID string) error {
+	_, err := c.command(ctx, "D", "restore", trashID)
+	return err
 }
 
 func (c Client) CloneURL(repo string) string {
@@ -108,4 +157,14 @@ func validAccess(access string) bool {
 		}
 	}
 	return found
+}
+
+func ParseTrashList(output string) []string {
+	var entries []string
+	for _, raw := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n") {
+		if entry := strings.TrimSpace(raw); entry != "" {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
 }

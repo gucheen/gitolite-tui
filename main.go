@@ -139,6 +139,46 @@ func run(args []string) error {
 			}
 		}
 		return store.Clone(ctx, client.CloneURL(rest[0]), destination)
+	case "create":
+		if len(rest) != 1 {
+			return errors.New("usage: gitolite-tui create <repo>")
+		}
+		return client.Create(ctx, rest[0])
+	case "desc":
+		if len(rest) == 0 {
+			return errors.New("usage: gitolite-tui desc <repo> [description]")
+		}
+		if len(rest) == 1 {
+			description, err := client.Description(ctx, rest[0])
+			if err != nil {
+				return err
+			}
+			fmt.Println(description)
+			return nil
+		}
+		return client.SetDescription(ctx, rest[0], strings.Join(rest[1:], " "))
+	case "trash":
+		if len(rest) != 1 {
+			return errors.New("usage: gitolite-tui trash <repo>")
+		}
+		return client.Trash(ctx, rest[0])
+	case "trash-list":
+		if len(rest) != 0 {
+			return errors.New("usage: gitolite-tui trash-list")
+		}
+		entries, err := client.ListTrash(ctx)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			fmt.Println(entry)
+		}
+		return nil
+	case "restore":
+		if len(rest) != 1 {
+			return errors.New("usage: gitolite-tui restore <trash-id>")
+		}
+		return client.Restore(ctx, rest[0])
 	case "tui":
 		if len(rest) != 0 {
 			return errors.New("usage: gitolite-tui tui")
@@ -174,6 +214,11 @@ Usage:
   gitolite-tui [--host HOST] [--user USER] url <repo>
   gitolite-tui [--host HOST] [--user USER] log <repo>
   gitolite-tui [--host HOST] [--user USER] clone <repo> [directory]
+  gitolite-tui [--host HOST] [--user USER] create <repo>
+  gitolite-tui [--host HOST] [--user USER] desc <repo> [description]
+  gitolite-tui [--host HOST] [--user USER] trash <repo>
+  gitolite-tui [--host HOST] [--user USER] trash-list
+  gitolite-tui [--host HOST] [--user USER] restore <trash-id>
   gitolite-tui [--host HOST] [--user USER] tui
 
 Environment:
