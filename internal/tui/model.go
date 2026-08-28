@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/gucheng01/gitolite-tui/internal/gitolite"
 	"github.com/gucheng01/gitolite-tui/internal/repository"
@@ -321,6 +323,14 @@ func (m Model) updateTrash(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.trashCursor+1 < len(m.trash) {
 			m.trashCursor++
 		}
+	case "pgup":
+		m.trashCursor = max(0, m.trashCursor-max(1, m.layout().listRows))
+	case "pgdown":
+		m.trashCursor = min(max(0, len(m.trash)-1), m.trashCursor+max(1, m.layout().listRows))
+	case "home":
+		m.trashCursor = 0
+	case "end":
+		m.trashCursor = max(0, len(m.trash)-1)
 	case "R":
 		m.loading, m.err, m.status = true, nil, "Reloading trash…"
 		return m, m.loadTrashCmd("")
@@ -503,6 +513,16 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor+1 < len(m.filtered) {
 				m.cursor++
 			}
+		case "pgup":
+			m.cursor = max(0, m.cursor-max(1, m.layout().listRows))
+		case "pgdown":
+			m.cursor = min(max(0, len(m.filtered)-1), m.cursor+max(1, m.layout().listRows))
+		case "home":
+			m.cursor = 0
+		case "end":
+			m.cursor = max(0, len(m.filtered)-1)
+		case "esc":
+			m.active, m.commits = "", nil
 		case "enter":
 			if repo, ok := m.selected(); ok {
 				if repo.Wildcard {
@@ -550,128 +570,140 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) writePrompt(out *strings.Builder) {
+func (m Model) promptLines(width int) []string {
 	switch m.prompt {
 	case promptCreate:
-		out.WriteString("\nCreate wildcard repository\nRepository: " + m.input + "█\n")
-		out.WriteString("enter create  esc cancel\n")
+		return []string{"", "Create wildcard repository", inputLine("Repository: "+m.input, width), "enter create  esc cancel"}
 	case promptDescription:
-		fmt.Fprintf(out, "\nEdit description — %s\nDescription: %s█\n", m.target, m.input)
-		out.WriteString("enter save  esc cancel\n")
+		return []string{"", "Edit description — " + m.target, inputLine("Description: "+m.input, width), "enter save  esc cancel"}
 	case promptTrash:
-		fmt.Fprintf(out, "\nMove %s to trash?\nType the full repository name: %s█\n", m.target, m.input)
-		out.WriteString("enter trash  esc cancel\n")
+		return []string{"", "Move " + m.target + " to trash?", inputLine("Type the full repository name: "+m.input, width), "enter trash  esc cancel"}
 	case promptRestore:
-		fmt.Fprintf(out, "\nRestore %s?\n", m.target)
-		out.WriteString("enter restore  esc cancel\n")
+		return []string{"", "Restore " + m.target + "?", "enter restore  esc cancel"}
 	}
+	return nil
 }
 
-func (m Model) viewTrash() string {
-	var out strings.Builder
-	fmt.Fprintf(&out, "gitolite-tui  %s@%s\nTrash\n", m.client.User, m.client.Host)
-	out.WriteString(strings.Repeat("─", clamp(m.width, 20, 100)) + "\n")
+func inputLine(value string, width int) string {
+	value = singleLine(value) + "█"
+	if cells := ansi.StringWidth(value); cells > width {
+		return "…" + ansi.Cut(value, cells-width+1, cells)
+	}
+	return value
+}
 
-	listHeight := clamp(m.height-8, 4, 20)
-	if m.height == 0 {
-		listHeight = 10
-	}
-	start := 0
-	if m.trashCursor >= listHeight {
-		start = m.trashCursor - listHeight + 1
-	}
-	end := min(len(m.trash), start+listHeight)
-	for row := start; row < end; row++ {
-		marker := "  "
-		if row == m.trashCursor {
-			marker = "> "
-		}
-		out.WriteString(marker + truncate(m.trash[row], max(20, m.width-2)) + "\n")
-	}
-	if len(m.trash) == 0 && !m.loading {
-		out.WriteString("  Trash is empty\n")
-	}
+type viewLayout struct {
+	width, height          int
+	header, detail, footer []string
+	listRows, commitRows   int
+}
 
-	m.writePrompt(&out)
-	out.WriteByte('\n')
-	if m.err != nil {
-		fmt.Fprintf(&out, "Error: %v\n", m.err)
+func (m Model) layout() viewLayout {
+	l := viewLayout{width: m.width, height: m.height}
+	if l.width <= 0 {
+		l.width = 80
+	}
+	if l.height <= 0 {
+		l.height = 24
+	}
+	l.header = []string{fmt.Sprintf("gitolite-tui  %s@%s", m.client.User, m.client.Host)}
+	help := []string{"↑/↓ select", "pgup/pgdown page", "home/end jump"}
+	if m.showTrash {
+		l.header = append(l.header, "Trash")
+		help = append(help, "enter/r restore", "R reload", "T/esc repositories", "q quit")
 	} else {
-		out.WriteString(m.status + "\n")
+		search := "Search: " + m.query + "  (press / to edit)"
+		if m.search {
+			search = inputLine("Search: "+m.query, l.width)
+		}
+		l.header = append(l.header, search)
+		help = append(help, "enter log", "esc hide log", "n new", "e desc", "d trash", "T trash-bin", "/ search",
+			"c copy", "l clone", "r refresh", "R reload", "t tig", "q quit")
+		if repo, ok := m.selected(); ok {
+			l.detail = []string{"", "Clone: " + m.client.CloneURL(repo.Name)}
+			if repo.Wildcard {
+				l.detail = append(l.detail, "This is a wildcard rule; log, refresh, and tig are unavailable.")
+			}
+			if m.active == repo.Name {
+				l.detail = append(l.detail, "Recent commits — "+m.active)
+				l.commitRows = len(m.commits)
+			}
+		}
 	}
-	out.WriteString("↑/↓ select  enter/r restore  R reload  T/esc repositories  q quit\n")
-	return out.String()
+	l.header = append(l.header, strings.Repeat("─", l.width))
+	l.footer = m.promptLines(l.width)
+	status := m.status
+	if m.err != nil {
+		status = fmt.Sprintf("Error: %v", m.err)
+	}
+	l.footer = append(l.footer, "", status)
+	line := ""
+	for _, binding := range help {
+		if line != "" && ansi.StringWidth(line)+2+ansi.StringWidth(binding) > l.width {
+			l.footer = append(l.footer, line)
+			line = ""
+		}
+		if line != "" {
+			line += "  "
+		}
+		line += binding
+	}
+	l.footer = append(l.footer, line)
+	available := max(0, l.height-len(l.header)-len(l.detail)-len(l.footer))
+	l.commitRows = min(l.commitRows, available/3)
+	l.listRows = available - l.commitRows
+	return l
 }
 
 func (m Model) View() string {
+	l := m.layout()
+	if l.listRows == 0 || l.width < 20 {
+		lines := []string{"Terminal too small; enlarge to continue.", "ctrl+c quit"}
+		for i := range lines {
+			lines[i] = truncate(lines[i], l.width)
+		}
+		return strings.Join(lines[:min(len(lines), l.height)], "\n")
+	}
+
+	lines := l.header
+	count, cursor := len(m.filtered), m.cursor
 	if m.showTrash {
-		return m.viewTrash()
+		count, cursor = len(m.trash), m.trashCursor
 	}
-	var out strings.Builder
-	fmt.Fprintf(&out, "gitolite-tui  %s@%s\n", m.client.User, m.client.Host)
-	if m.search {
-		fmt.Fprintf(&out, "Search: %s█\n", m.query)
-	} else {
-		fmt.Fprintf(&out, "Search: %s  (press / to edit)\n", m.query)
-	}
-	out.WriteString(strings.Repeat("─", clamp(m.width, 20, 100)) + "\n")
-
-	listHeight := clamp(m.height/3, 4, 12)
-	if m.height == 0 {
-		listHeight = 8
-	}
-	start := 0
-	if m.cursor >= listHeight {
-		start = m.cursor - listHeight + 1
-	}
-	end := min(len(m.filtered), start+listHeight)
-	for row := start; row < end; row++ {
-		repo := m.repos[m.filtered[row]]
-		marker := "  "
-		if row == m.cursor {
-			marker = "> "
-		}
-		name := repo.Name
-		if repo.Wildcard {
-			name += "  [wildcard]"
-		}
-		fmt.Fprintf(&out, "%s%-6s %s\n", marker, repo.Access, truncate(name, max(10, m.width-11)))
-	}
-	for row := end - start; row < listHeight; row++ {
-		out.WriteByte('\n')
-	}
-
-	if repo, ok := m.selected(); ok {
-		fmt.Fprintf(&out, "\nClone: %s\n", m.client.CloneURL(repo.Name))
-		if repo.Wildcard {
-			out.WriteString("This is a wildcard rule; log, refresh, and tig are unavailable.\n")
-		}
-		if m.active == repo.Name {
-			fmt.Fprintf(&out, "Recent commits — %s\n", m.active)
-			commitRows := max(1, m.height-listHeight-10)
-			if m.height == 0 {
-				commitRows = 8
+	start := min(max(0, cursor-l.listRows+1), max(0, count-l.listRows))
+	for row := start; row < start+l.listRows; row++ {
+		line := ""
+		if row < count {
+			marker := "  "
+			if row == cursor {
+				marker = "> "
 			}
-			for i, commit := range m.commits {
-				if i >= commitRows {
-					break
+			if m.showTrash {
+				line = marker + m.trash[row]
+			} else {
+				repo := m.repos[m.filtered[row]]
+				line = fmt.Sprintf("%s%-6s %s", marker, repo.Access, repo.Name)
+				if repo.Wildcard {
+					line += "  [wildcard]"
 				}
-				line := fmt.Sprintf("%s %s %-14s %s", commit.Hash, commit.Date, commit.Author, commit.Subject)
-				out.WriteString(truncate(line, max(20, m.width)) + "\n")
+			}
+		} else if count == 0 && row == 0 && !m.loading {
+			line = "  No repositories found"
+			if m.showTrash {
+				line = "  Trash is empty"
 			}
 		}
+		lines = append(lines, line)
 	}
-
-	m.writePrompt(&out)
-	out.WriteByte('\n')
-	if m.err != nil {
-		fmt.Fprintf(&out, "Error: %v\n", m.err)
-	} else {
-		out.WriteString(m.status + "\n")
+	lines = append(lines, l.detail...)
+	for _, commit := range m.commits[:l.commitRows] {
+		lines = append(lines, fmt.Sprintf("%s %s %-14s %s", commit.Hash, commit.Date, commit.Author, commit.Subject))
 	}
-	out.WriteString("↑/↓ select  enter log  n new  e desc  d trash  T trash-bin  / search\n")
-	out.WriteString("c copy  l clone  r refresh  R reload  t tig  q quit\n")
-	return out.String()
+	lines = append(lines, l.footer...)
+	for i := range lines {
+		lines[i] = truncate(lines[i], l.width)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func copyClipboard(value string) error {
@@ -702,16 +734,14 @@ func truncate(value string, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	runes := []rune(value)
-	if len(runes) <= width {
-		return value
-	}
-	if width == 1 {
-		return "…"
-	}
-	return string(runes[:width-1]) + "…"
+	return ansi.Truncate(singleLine(value), width, "…")
 }
 
-func clamp(value, low, high int) int {
-	return min(max(value, low), high)
+func singleLine(value string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, value)
 }

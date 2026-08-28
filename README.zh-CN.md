@@ -34,7 +34,12 @@ gitolite-tui restore <trash-id>
 gitolite-tui tui
 ```
 
-TUI 按键：`/` 搜索，方向键或 `j/k` 选择，`enter` 缓存并显示提交，
+TUI 会随终端窗口大小自动调整，列表使用可用高度，不再限制仓库显示行数。
+打开提交预览时会为其分配部分空间，按 `Esc` 收起预览可恢复完整列表高度；
+超长内容按终端宽度截断。
+
+TUI 按键：`/` 搜索，方向键或 `j/k` 选择，`Page Up` / `Page Down` 翻页，
+`Home` / `End` 跳到首项或末项（Trash 列表也支持），`enter` 缓存并显示提交，
 `n` 创建 wildcard 仓库，`e` 编辑描述，`d` 将仓库移入 Trash，`T` 查看
 Trash 并恢复仓库，`c` 复制 Clone 地址，`l` Clone 到当前目录，`r` 刷新
 当前仓库，`R` 重新获取仓库列表，`t` 用 tig 打开缓存，`q` 退出。

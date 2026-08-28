@@ -10,6 +10,7 @@ and provides both an interactive terminal UI and script-friendly commands.
 ## Features
 
 - Browse and search accessible Gitolite repositories.
+- Automatically fit the terminal size, showing more repositories in taller windows.
 - Display wildcard repository rules without attempting to load logs or open
   them with `tig`.
 - View the SSH clone URL for each repository.
@@ -66,7 +67,10 @@ Running `gitolite-tui` without a command also starts the TUI.
 | --- | --- |
 | `/` | Edit the repository search query |
 | `Up` / `Down`, `j` / `k` | Select a repository |
+| `Page Up` / `Page Down` | Move by one visible page (also in trash) |
+| `Home` / `End` | Jump to the first / last repository (also in trash) |
 | `Enter` | Cache the selected repository and show recent commits |
+| `Esc` | Hide the commit preview and expand the repository list |
 | `n` | Create a wildcard repository |
 | `e` | Edit the selected repository description |
 | `d` | Move the selected repository to trash |
@@ -77,6 +81,10 @@ Running `gitolite-tui` without a command also starts the TUI.
 | `R` | Reload the repository list from Gitolite |
 | `t` | Open the cached repository with `tig` |
 | `q` | Quit |
+
+The layout updates when the terminal is resized. The repository list uses the
+available height, sharing space with recent commits only while their repository
+is selected. Long lines are truncated to the terminal width.
 
 The create, description, and trash features require the corresponding `create`,
 `desc`, and `D` remote commands to be enabled in the Gitolite server's
